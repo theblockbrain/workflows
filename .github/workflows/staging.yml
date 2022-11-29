@@ -1,0 +1,74 @@
+name: Docker tag canary image with git tag and deploy to staging
+
+on:
+  workflow_call:
+    inputs:
+      container-name:
+        required: true
+        type: string
+    secrets:
+      iam-role:
+        required: true
+
+env:
+  IAM_ROLE: ${{ secrets.iam-role }}
+  CONTAINER_NAME: ${{ inputs.container-name }}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: build-and-deploy
+      cancel-in-progress: true
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint and to commit kustomize fixes
+    permissions:
+      id-token: write
+      contents: write
+    outputs:
+      image: ${{ steps.docker_build.outputs.image }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ env.IAM_ROLE }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@4831715c8c81dbf2ae795f9e285de2a9ee1150b4
+
+      - name: Tag canary image Amazon ECR
+        id: docker_tag
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
+        run: |
+          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:canary
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:canary $ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF/refs\/tags\//}
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:canary $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF/refs\/tags\//} --all-tags
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF/refs\/tags\//}"
+
+      #######
+      ## Auto-deploy to Staging Environment
+      #######
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "3.6.1"
+
+      - name: Update Kubernetes resources for dev
+        run: |
+          cd kubernetes/staging/
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.docker_tag.outputs.image }}
+          cat kustomization.yaml
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        name: Bump version
+        with:
+          commit_message:  Auto-deploy to staging (via gitops)
