@@ -17,4 +17,4 @@ The [staging workflow](.github/workflows/staging.yml) does the following:
 It is triggered on git tags, re-tags the latest docker image and patches kubernetes deployment files for the staging environment.
 
 ## License
-This project is available under the MIT license. See the [LICENSE file](./LICENSE.MD) for more info.
+This project is available under the MIT license. See the [LICENSE file](./LICENSE.md) for more info.
