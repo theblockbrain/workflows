@@ -6,13 +6,19 @@ on:
       container-name:
         required: true
         type: string
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
     secrets:
       iam-role:
         required: true
+      
 
 env:
   IAM_ROLE: ${{ secrets.iam-role }}
   CONTAINER_NAME: ${{ inputs.container-name }}
+  DOCKERFILE: ${{ inputs.dockerfile }}
 
 jobs:
   build-and-deploy:
@@ -57,10 +63,11 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
+          DOCKERFILE: ${{ env.DOCKERFILE }}
           BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
           LATEST_ID: ${{ steps.prep.outputs.LATEST_ID }}
         run: |
-          DOCKER_BUILDKIT=1 docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID -t $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_ID .
+          DOCKER_BUILDKIT=1 docker build -f $DOCKERFILE -t $ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID -t $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_ID .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags  
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID"   
 
