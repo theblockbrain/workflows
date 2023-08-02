@@ -44,9 +44,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run Pre-Command
-        if: ${{ env.PRE_COMMAND }}
+        if: ${{ inputs.pre-command }}
         run: |
-          eval $PRE_COMMAND
+          eval "${{ inputs.pre-command }}"
           
       - name: Prepare
         id: prep
