@@ -17,10 +17,13 @@ on:
       pre-command:
         required: false
         type: string
+      pull-first:
+        required: false
+        type: boolean
+        default: false
     secrets:
       iam-role:
         required: true
-      
 
 env:
   IAM_ROLE: ${{ secrets.iam-role }}
@@ -94,6 +97,11 @@ jobs:
         uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.6.1"
+
+      - name: Pull changes
+        if: ${{ inputs.pull-first }}
+        run: |
+          git pull
 
       - name: Update Kubernetes resources for dev
         run: |
