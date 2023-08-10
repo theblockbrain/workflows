@@ -22,7 +22,7 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     concurrency:
-      group: build-and-deploy
+      group: tag-and-deploy
       cancel-in-progress: ${{ inputs.cancel-in-progress }}
     # These permissions are needed to interact with GitHub's OIDC Token endpoint and to commit kustomize fixes
     permissions:
