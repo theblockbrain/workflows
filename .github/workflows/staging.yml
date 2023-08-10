@@ -95,16 +95,17 @@ jobs:
             const fs = require('fs');
             const path = './CHANGELOG.md';
             const { owner, repo } = context.repo;
-            const prs = '🔗 PRs: ${{steps.build_changelog.outputs.pull_requests}}'
-            const tags = '🏷️ Tags: ${{steps.build_changelog.outputs.fromTag}} -> ${{steps.build_changelog.outputs.toTag}}';
+            const date = `# ${new Date().toString()}`
+            const prs = '**🔗 PRs**: ${{steps.build_changelog.outputs.pull_requests}}'
+            const tags = '**🏷️ Tags**: ${{steps.build_changelog.outputs.fromTag}} -> ${{steps.build_changelog.outputs.toTag}}';
             const changeCounts =
-              "📂 Changed Files: ${{steps.build_changelog.outputs.changed_files}}" +
-              "\n➕ Additions (loc): ${{steps.build_changelog.outputs.additions}}" +
-              "\n➖ Deletions (loc): ${{steps.build_changelog.outputs.deletions}}" +
-              "\n🔄 Changes (loc): ${{steps.build_changelog.outputs.changes}}" +
-              "\n🔀 Commits: ${{steps.build_changelog.outputs.commits}}";
-            const changelog = '${{steps.build_changelog.outputs.changelog}}'
-            const attachedContent = '\n\n---\n${new Date().toString()}\n\n${tags}\n${prs}\n\n${changeCounts}\n\n${changelog}';
+              "**📂 Changed Files**: ${{steps.build_changelog.outputs.changed_files}}" +
+              "\n**➕ Additions (loc)**: ${{steps.build_changelog.outputs.additions}}" +
+              "\n**➖ Deletions (loc)**: ${{steps.build_changelog.outputs.deletions}}" +
+              "\n**🔄 Changes (loc)**: ${{steps.build_changelog.outputs.changes}}" +
+              "\n**🔀 Commits**: ${{steps.build_changelog.outputs.commits}}";
+            const changelog = '## Log\n\n${{steps.build_changelog.outputs.changelog}}'
+            const attachedContent = `\n\n---\n${date}\n\n${tags}\n${prs}\n\n${changeCounts}\n\n${changelog}`;
             fs.appendFileSync(path, attachedContent);
 
       - uses: stefanzweifel/git-auto-commit-action@v4
