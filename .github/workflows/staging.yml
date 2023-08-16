@@ -88,6 +88,9 @@ jobs:
         uses: mikepenz/release-changelog-builder-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          fetchViaCommits: true
+          fetchReleaseInformation: true
 
       - name: Append and commit changelog
         uses: actions/github-script@v6
