@@ -1,0 +1,50 @@
+name: Docker build, push and deploy to Dev
+
+on:
+  workflow_call:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: create-changelog
+      cancel-in-progress: true
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: read
+    steps:    
+      - name: 'Build Changelog'
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          fetchViaCommits: true
+          fetchReleaseInformation: true
+
+      - name: Append and commit changelog
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            const path = './CHANGELOG.md';
+            const { owner, repo } = context.repo;
+            const date = `# ${new Date().toUTCString()}`
+            const prs = '**🔗 PRs**: ${{steps.build_changelog.outputs.pull_requests}}'
+            const tags = '**🏷️ Tags**: ${{steps.build_changelog.outputs.fromTag}} -> ${{steps.build_changelog.outputs.toTag}}';
+            const changeCounts =
+              "**📂 Changed Files**: ${{steps.build_changelog.outputs.changed_files}}" +
+              "\n\n**➕ Additions (loc)**: ${{steps.build_changelog.outputs.additions}}" +
+              "\n\n**➖ Deletions (loc)**: ${{steps.build_changelog.outputs.deletions}}" +
+              "\n\n**🔄 Changes (loc)**: ${{steps.build_changelog.outputs.changes}}" +
+              "\n\n**🔀 Commits**: ${{steps.build_changelog.outputs.commits}}";
+            const changelog = '## Log\n\n${{steps.build_changelog.outputs.changelog}}'
+            const attachedContent = `---\n${date}\n\n\n${tags}\n\n${prs}\n\n\n${changeCounts}\n\n\n${changelog}\n\n\n`;
+            fs.appendFileSync(path, attachedContent);
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        name: Bump version
+        with:
+          commit_message:  Auto-generate and append to changelog (via gitops)
