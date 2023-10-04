@@ -77,7 +77,7 @@ jobs:
         run: |
           git pull
 
-      - name: Update Kubernetes resources for dev
+      - name: Update Kubernetes resources for Staging
         run: |
           cd kubernetes/staging/
           kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.docker_tag.outputs.image }}
