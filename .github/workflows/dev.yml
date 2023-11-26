@@ -13,7 +13,8 @@ on:
       platforms:
         required: false
         type: string
-        default: linux/amd64,linux/arm64
+        #linux/amd64,linux/arm64
+        default: linux/amd64
       cancel-in-progress:
         required: false
         type: boolean
@@ -102,27 +103,27 @@ jobs:
       ## Auto-deploy to Dev Environment
       #######
 
-#      - name: Setup Kustomize
-#        uses: imranismail/setup-kustomize@v1
-#        with:
-#          kustomize-version: "3.6.1"
-#
-#      - name: Pull changes
-#        if: ${{ inputs.pull-first }}
-#        run: |
-#          git pull
-#
-#      - name: Update Kubernetes resources for dev
-#        env:
-#          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-#          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
-#        run: |
-#          cd kubernetes/develop/
-#          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
-#          cat kustomization.yaml
-#
-#      - uses: stefanzweifel/git-auto-commit-action@v4
-#        name: Bump version
-#        with:
-#          commit_message: Auto-deploy to dev (via gitops)
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "3.6.1"
+
+      - name: Pull changes
+        if: ${{ inputs.pull-first }}
+        run: |
+          git pull
+
+      - name: Update Kubernetes resources for dev
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
+          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
+        run: |
+          cd kubernetes/develop/
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
+          cat kustomization.yaml
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        name: Bump version
+        with:
+          commit_message: Auto-deploy to dev (via gitops)
