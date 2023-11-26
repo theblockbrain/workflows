@@ -10,6 +10,10 @@ on:
         required: false
         type: string
         default: Dockerfile
+      platforms:
+        required: false
+        type: string
+        default: linux/amd64,linux/arm64
       cancel-in-progress:
         required: false
         type: boolean
@@ -29,6 +33,7 @@ env:
   IAM_ROLE: ${{ secrets.iam-role }}
   CONTAINER_NAME: ${{ inputs.container-name }}
   DOCKERFILE: ${{ inputs.dockerfile }}
+  PLATFORMS: ${{ inputs.platforms }}
 
 jobs:
   build-and-deploy:
@@ -79,13 +84,13 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@4831715c8c81dbf2ae795f9e285de2a9ee1150b4
 
-      - name: Build and push by digest
+      - name: Build and push
         id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./${{ env.DOCKERFILE }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.PLATFORMS }}
           push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
