@@ -82,25 +82,16 @@ jobs:
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v5
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
-          LATEST_ID: ${{ steps.prep.outputs.LATEST_ID }}
         with:
           context: .
           file: ./${{ env.DOCKERFILE }}
           platforms: linux/amd64,linux/arm64
-          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            $ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
-            $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_ID
-
-      - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.image }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
 
       #######
       ## Auto-deploy to Dev Environment
