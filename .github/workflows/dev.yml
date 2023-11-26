@@ -10,6 +10,11 @@ on:
         required: false
         type: string
         default: Dockerfile
+      platforms:
+        required: false
+        type: string
+        #linux/amd64,linux/arm64
+        default: linux/amd64
       cancel-in-progress:
         required: false
         type: boolean
@@ -29,6 +34,7 @@ env:
   IAM_ROLE: ${{ secrets.iam-role }}
   CONTAINER_NAME: ${{ inputs.container-name }}
   DOCKERFILE: ${{ inputs.dockerfile }}
+  PLATFORMS: ${{ inputs.platforms }}
 
 jobs:
   build-and-deploy:
@@ -42,9 +48,15 @@ jobs:
       contents: write
     outputs:
       image: ${{ steps.docker_build.outputs.image }}
-    steps:    
+    steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Run Pre-Command
         if: ${{ inputs.pre-command }}
@@ -73,21 +85,19 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@4831715c8c81dbf2ae795f9e285de2a9ee1150b4
 
-      - name: Build, tag, and push image to Amazon ECR
-        id: docker_build
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-          DOCKERFILE: ${{ env.DOCKERFILE }}
-          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
-          LATEST_ID: ${{ steps.prep.outputs.LATEST_ID }}
-        run: |
-          DOCKER_BUILDKIT=1 docker build -f $DOCKERFILE -t $ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID -t $ECR_REGISTRY/$ECR_REPOSITORY:$LATEST_ID .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags  
-          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID"   
-
-      - name: Image digest
-        run: echo ${{ steps.docker_build.outputs.image }}
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./${{ env.DOCKERFILE }}
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
 
       #######
       ## Auto-deploy to Dev Environment
@@ -104,9 +114,13 @@ jobs:
           git pull
 
       - name: Update Kubernetes resources for dev
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
+          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
         run: |
           cd kubernetes/develop/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.docker_build.outputs.image }}
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
           cat kustomization.yaml
 
       - uses: stefanzweifel/git-auto-commit-action@v4
