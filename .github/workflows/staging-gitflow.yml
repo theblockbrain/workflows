@@ -1,0 +1,131 @@
+name: Docker build, push and deploy to QA with Gitflow
+
+on:
+  workflow_call:
+    inputs:
+      container-name:
+        required: true
+        type: string
+      dockerfile:
+        required: false
+        type: string
+        default: Dockerfile
+      platforms:
+        required: false
+        type: string
+        #linux/amd64,linux/arm64
+        default: linux/amd64
+      cancel-in-progress:
+        required: false
+        type: boolean
+        default: true
+      pre-command:
+        required: false
+        type: string
+      pull-first:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      iam-role:
+        required: true
+
+env:
+  IAM_ROLE: ${{ secrets.iam-role }}
+  CONTAINER_NAME: ${{ inputs.container-name }}
+  DOCKERFILE: ${{ inputs.dockerfile }}
+  PLATFORMS: ${{ inputs.platforms }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: build-and-deploy
+      cancel-in-progress: ${{ inputs.cancel-in-progress }}
+    # These permissions are needed to interact with GitHub's OIDC Token endpoint and to commit kustomize fixes
+    permissions:
+      id-token: write
+      contents: write
+    outputs:
+      image: ${{ steps.docker_build.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run Pre-Command
+        if: ${{ inputs.pre-command }}
+        run: |
+          eval "${{ inputs.pre-command }}"
+
+      - name: Prepare
+        id: prep
+        run: |
+          BRANCH=${GITHUB_REF##*/}
+          TS=$(date +%s)
+          REVISION=${GITHUB_SHA::8}
+          BUILD_ID="${BRANCH}-${REVISION}-${TS}"
+          LATEST_ID=staging
+          echo ::set-output name=BUILD_DATE::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          echo ::set-output name=BUILD_ID::${BUILD_ID}
+          echo ::set-output name=LATEST_ID::${LATEST_ID}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ env.IAM_ROLE }}
+          aws-region: eu-central-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@4831715c8c81dbf2ae795f9e285de2a9ee1150b4
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./${{ env.DOCKERFILE }}
+          platforms: ${{ env.PLATFORMS }}
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
+
+      #######
+      ## Auto-deploy to Dev Environment
+      #######
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v1
+        with:
+          kustomize-version: "3.6.1"
+
+      - name: Pull changes
+        if: ${{ inputs.pull-first }}
+        run: |
+          git pull
+
+      - name: Update Kubernetes resources for QA
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
+          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
+        run: |
+          cd kubernetes/staging/
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
+          cat kustomization.yaml
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        name: Bump version
+        with:
+          commit_message: Auto-deploy to QA with Gitflow (via gitops)
