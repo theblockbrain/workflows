@@ -136,3 +136,13 @@ jobs:
         name: Bump version
         with:
           commit_message: Auto-deploy to dev (via gitops)
+
+  # Prepare release for qa
+  release-please:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
