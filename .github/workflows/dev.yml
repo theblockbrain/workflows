@@ -9,7 +9,7 @@ on:
       version-next:
         required: true
         type: string
-      version-sha:
+      sha:
         required: true
         type: string
       dockerfile:
