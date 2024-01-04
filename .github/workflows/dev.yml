@@ -60,6 +60,9 @@ jobs:
          token: ${{ github.token }}
          branch: main
 
+      - name: Add SHORT_SHA env property with commit short sha
+        run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -95,7 +98,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${{ GITHUB_SHA:0:8 }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}
 
       #######
@@ -117,13 +120,13 @@ jobs:
         if: ${{ inputs.deployment_tool == 'kustomize' }}
         run: |
           cd kubernetes/develop/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${{ GITHUB_SHA:0:8 }}
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
           cat kustomization.yaml
 
       - name: Update appVersion in Chart.yaml for Helm
         if: ${{ inputs.deployment_tool == 'helm' }}
         env:
-          APP_VERSION: ${{ steps.semver.outputs.next }}-rc.${{ GITHUB_SHA:0:8 }}
+          APP_VERSION: ${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
         run: |
           cd kubernetes/develop/
           sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
