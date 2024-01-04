@@ -1,119 +1,19 @@
-name: Docker tag canary image with git tag and deploy to staging
+name: Deploy to staging via "release please"
 
 on:
   workflow_call:
-    inputs:
-      container-name:
-        required: true
-        type: string
-      cancel-in-progress:
-        required: false
-        type: boolean
-        default: true
-      pull-first:
-        required: false
-        type: boolean
-        default: false
-    secrets:
-      iam-role:
-        required: true
 
-env:
-  IAM_ROLE: ${{ secrets.iam-role }}
-  CONTAINER_NAME: ${{ inputs.container-name }}
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  tag:
+  release-please:
     runs-on: ubuntu-latest
-    concurrency:
-      group: tag-and-deploy
-      cancel-in-progress: ${{ inputs.cancel-in-progress }}
-    # These permissions are needed to interact with GitHub's OIDC Token endpoint and to commit kustomize fixes
-    permissions:
-      id-token: write
-      contents: write
-      pull-requests: read
-      
-    outputs:
-      image: ${{ steps.docker_build.outputs.image }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: google-github-actions/release-please-action@v4
         with:
-          ref: main
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          role-to-assume: ${{ env.IAM_ROLE }}
-          aws-region: eu-central-1
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@4831715c8c81dbf2ae795f9e285de2a9ee1150b4
-
-      - name: Tag canary image Amazon ECR
-        id: docker_tag
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-        run: |
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:canary
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:canary $ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF/refs\/tags\//}
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:canary $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY --all-tags
-          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:${GITHUB_REF/refs\/tags\//}"
-
-      #######
-      ## Auto-deploy to Staging Environment
-      #######
-
-      - name: Setup Kustomize
-        uses: imranismail/setup-kustomize@v1
-        with:
-          kustomize-version: "3.6.1"
-
-      - name: Pull changes
-        if: ${{ inputs.pull-first }}
-        run: |
-          git pull
-
-      - name: Update Kubernetes resources for Staging
-        run: |
-          cd kubernetes/staging/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.docker_tag.outputs.image }}
-          cat kustomization.yaml
-          
-      - name: 'Build Changelog'
-        id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          fetchViaCommits: true
-          fetchReleaseInformation: true
-
-      - name: Append and commit changelog
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            const fs = require('fs');
-            const path = './CHANGELOG.md';
-            const { owner, repo } = context.repo;
-            const date = `# ${new Date().toUTCString()}`
-            const prs = '**🔗 PRs**: ${{steps.build_changelog.outputs.pull_requests}}'
-            const tags = '**🏷️ Tags**: ${{steps.build_changelog.outputs.fromTag}} -> ${{steps.build_changelog.outputs.toTag}}';
-            const changeCounts =
-              "**📂 Changed Files**: ${{steps.build_changelog.outputs.changed_files}}" +
-              "\n\n**➕ Additions (loc)**: ${{steps.build_changelog.outputs.additions}}" +
-              "\n\n**➖ Deletions (loc)**: ${{steps.build_changelog.outputs.deletions}}" +
-              "\n\n**🔄 Changes (loc)**: ${{steps.build_changelog.outputs.changes}}" +
-              "\n\n**🔀 Commits**: ${{steps.build_changelog.outputs.commits}}";
-            const changelog = '## Log\n\n${{steps.build_changelog.outputs.changelog}}'
-            const attachedContent = `---\n${date}\n\n\n${tags}\n\n${prs}\n\n\n${changeCounts}\n\n\n${changelog}\n\n\n`;
-            fs.appendFileSync(path, attachedContent);
-
-      - uses: stefanzweifel/git-auto-commit-action@v4
-        name: Bump version
-        with:
-          commit_message:  Auto-deploy to staging (via gitops)
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          #this is done in dev build
+          skip-github-pull-requests: true
