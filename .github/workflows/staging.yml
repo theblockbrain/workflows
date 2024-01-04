@@ -17,4 +17,4 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           #this is done in dev build
-          skip-github-pull-requests: true
+          skip-github-pull-request: true
