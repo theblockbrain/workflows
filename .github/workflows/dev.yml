@@ -144,12 +144,8 @@ jobs:
     needs: build-and-deploy
     runs-on: ubuntu-latest
     steps:
-      #fresh checkout!
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}  # This ensures checking out the same ref/branch as the triggering event
       - uses: google-github-actions/release-please-action@v4
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          target-branch: main
