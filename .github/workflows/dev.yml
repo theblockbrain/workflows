@@ -98,7 +98,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${{ env.SHORT_SHA }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}
 
       #######
@@ -120,13 +120,13 @@ jobs:
         if: ${{ inputs.deployment_tool == 'kustomize' }}
         run: |
           cd kubernetes/develop/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${{ env.SHORT_SHA }}
           cat kustomization.yaml
 
       - name: Update appVersion in Chart.yaml for Helm
         if: ${{ inputs.deployment_tool == 'helm' }}
         env:
-          APP_VERSION: ${{ steps.semver.outputs.next }}-rc.${SHORT_SHA}
+          APP_VERSION: ${{ steps.semver.outputs.next }}-rc.${{ env.SHORT_SHA }}
         run: |
           cd kubernetes/develop/
           sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
