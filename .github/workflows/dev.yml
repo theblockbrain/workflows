@@ -27,7 +27,7 @@ on:
         type: boolean
         default: false
       deployment_tool:
-        required: true
+        required: false
         type: string
         default: helm
     secrets:
