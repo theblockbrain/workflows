@@ -26,6 +26,10 @@ on:
         required: false
         type: boolean
         default: false
+      deployment_tool:
+        required: true
+        type: string
+        default: helm
     secrets:
       iam-role:
         required: true
@@ -104,6 +108,7 @@ jobs:
       #######
 
       - name: Setup Kustomize
+        if: ${{ inputs.deployment_tool == 'kustomize' }}
         uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.6.1"
@@ -113,7 +118,8 @@ jobs:
         run: |
           git pull
 
-      - name: Update Kubernetes resources for dev
+      - name: Update Kubernetes resources for dev with Kustomize
+        if: ${{ inputs.deployment_tool == 'kustomize' }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
@@ -122,6 +128,15 @@ jobs:
           cd kubernetes/develop/
           kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
           cat kustomization.yaml
+
+      - name: Update appVersion in Chart.yaml for Helm
+        if: ${{ inputs.deployment_tool == 'helm' }}
+        env:
+          APP_VERSION: ${{ steps.prep.outputs.BUILD_ID }}
+        run: |
+          cd kubernetes/develop/
+          sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
+          cat Chart.yaml
 
       - uses: stefanzweifel/git-auto-commit-action@v4
         name: Bump version
