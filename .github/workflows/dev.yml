@@ -42,6 +42,7 @@ env:
 
 jobs:
   build-and-deploy:
+    name: Docker build, push and deploy to Dev
     runs-on: ubuntu-latest
     concurrency:
       group: build-and-deploy
@@ -139,6 +140,7 @@ jobs:
 
   # Prepare release for qa
   release-please:
+    name: Prepare release for qa
     needs: build-and-deploy
     runs-on: ubuntu-latest
     steps:

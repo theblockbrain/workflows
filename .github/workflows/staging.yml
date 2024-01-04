@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   release-please:
+    name: Deploy to staging via "release please"
     runs-on: ubuntu-latest
     steps:
       - uses: google-github-actions/release-please-action@v4
