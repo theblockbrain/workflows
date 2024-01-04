@@ -6,12 +6,6 @@ on:
       container-name:
         required: true
         type: string
-      version-next:
-        required: true
-        type: string
-      sha:
-        required: true
-        type: string
       dockerfile:
         required: false
         type: string
@@ -59,6 +53,13 @@ jobs:
     outputs:
       image: ${{ steps.docker_build.outputs.image }}
     steps:
+      - name: Get Next Version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+         token: ${{ github.token }}
+         branch: main
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -94,8 +95,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ env.VERSION_NEXT }}-rc.${{ env.SHA }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ env.VERSION_NEXT }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${GITHUB_SHA:0:8}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}
 
       #######
       ## Auto-deploy to Dev Environment
@@ -116,13 +117,13 @@ jobs:
         if: ${{ inputs.deployment_tool == 'kustomize' }}
         run: |
           cd kubernetes/develop/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ env.VERSION_NEXT }}-rc.${{ env.SHA }}
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.next }}-rc.${GITHUB_SHA:0:8}
           cat kustomization.yaml
 
       - name: Update appVersion in Chart.yaml for Helm
         if: ${{ inputs.deployment_tool == 'helm' }}
         env:
-          APP_VERSION: ${{ env.VERSION_NEXT }}-rc.${{ env.SHA }}
+          APP_VERSION: ${{ steps.semver.outputs.next }}-rc.${GITHUB_SHA:0:8}
         run: |
           cd kubernetes/develop/
           sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
