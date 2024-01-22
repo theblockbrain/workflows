@@ -26,8 +26,14 @@ on:
         required: false
         type: boolean
         default: false
+      deployment_tool:
+        required: false
+        type: string
+        default: helm
     secrets:
       iam-role:
+        required: true
+      patch-pat:
         required: true
 
 env:
@@ -38,6 +44,7 @@ env:
 
 jobs:
   build-and-deploy:
+    name: Docker build, push and deploy to Dev
     runs-on: ubuntu-latest
     concurrency:
       group: build-and-deploy
@@ -49,8 +56,20 @@ jobs:
     outputs:
       image: ${{ steps.docker_build.outputs.image }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Get Next Version
+        id: semver
+        uses: ietf-tools/semver-action@v1
+        with:
+         token: ${{ github.token }}
+         branch: main
+
+      - name: Add SHORT_SHA env property with commit short sha
+        run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.patch-pat }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -62,18 +81,6 @@ jobs:
         if: ${{ inputs.pre-command }}
         run: |
           eval "${{ inputs.pre-command }}"
-          
-      - name: Prepare
-        id: prep
-        run: |
-          BRANCH=${GITHUB_REF##*/}
-          TS=$(date +%s)
-          REVISION=${GITHUB_SHA::8}
-          BUILD_ID="${BRANCH}-${REVISION}-${TS}"
-          LATEST_ID=canary
-          echo ::set-output name=BUILD_DATE::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-          echo ::set-output name=BUILD_ID::${BUILD_ID}
-          echo ::set-output name=LATEST_ID::${LATEST_ID}          
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -96,14 +103,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.nextStrict }}-rc.${{ env.SHORT_SHA }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.nextStrict }}
 
       #######
       ## Auto-deploy to Dev Environment
       #######
 
       - name: Setup Kustomize
+        if: ${{ inputs.deployment_tool == 'kustomize' }}
         uses: imranismail/setup-kustomize@v1
         with:
           kustomize-version: "3.6.1"
@@ -113,17 +121,36 @@ jobs:
         run: |
           git pull
 
-      - name: Update Kubernetes resources for dev
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
+      - name: Update Kubernetes resources for dev with Kustomize
+        if: ${{ inputs.deployment_tool == 'kustomize' }}
         run: |
           cd kubernetes/develop/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
+          kustomize edit set image ${{ env.CONTAINER_NAME }}=${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.semver.outputs.nextStrict }}-rc.${{ env.SHORT_SHA }}
           cat kustomization.yaml
 
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      - name: Update appVersion in Chart.yaml for Helm
+        if: ${{ inputs.deployment_tool == 'helm' }}
+        env:
+          APP_VERSION: ${{ steps.semver.outputs.nextStrict }}-rc.${{ env.SHORT_SHA }}
+        run: |
+          cd kubernetes/develop/
+          sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
+          cat Chart.yaml
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
         name: Bump version
         with:
           commit_message: Auto-deploy to dev (via gitops)
+          push_options: '--force'
+
+  # Prepare release for qa
+  release-please:
+    name: Prepare release for qa
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: main
