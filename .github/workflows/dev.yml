@@ -134,7 +134,7 @@ jobs:
           sed -i 's/appVersion:.*$/appVersion: "'$APP_VERSION'"/' Chart.yaml
           cat Chart.yaml
 
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      - uses: stefanzweifel/git-auto-commit-action@v5
         name: Bump version
         with:
           commit_message: Auto-deploy to dev (via gitops)
