@@ -138,7 +138,7 @@ jobs:
         name: Bump version
         with:
           commit_message: Auto-deploy to dev (via gitops)
-          push_options: --force
+          push_options: '--force'
 
   # Prepare release for qa
   release-please:
