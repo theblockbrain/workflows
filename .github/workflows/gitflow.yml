@@ -31,6 +31,10 @@ on:
         type: string
         # staging,production
         default: staging
+      branch:
+        required: false
+        type: string
+        default: main
     secrets:
       iam-role:
         required: true
@@ -58,7 +62,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.branch }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
