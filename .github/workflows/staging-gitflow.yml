@@ -100,32 +100,3 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
-
-      #######
-      ## Auto-deploy to Dev Environment
-      #######
-
-      - name: Setup Kustomize
-        uses: imranismail/setup-kustomize@v1
-        with:
-          kustomize-version: "3.6.1"
-
-      - name: Pull changes
-        if: ${{ inputs.pull-first }}
-        run: |
-          git pull
-
-      - name: Update Kubernetes resources for QA
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.CONTAINER_NAME }}
-          BUILD_ID: ${{ steps.prep.outputs.BUILD_ID }}
-        run: |
-          cd kubernetes/staging/
-          kustomize edit set image ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$BUILD_ID
-          cat kustomization.yaml
-
-      - uses: stefanzweifel/git-auto-commit-action@v4
-        name: Bump version
-        with:
-          commit_message: Auto-deploy to QA with Gitflow (via gitops)
