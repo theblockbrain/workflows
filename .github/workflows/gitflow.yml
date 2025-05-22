@@ -82,9 +82,11 @@ jobs:
           TS=$(date +%s)
           REVISION=${GITHUB_SHA::8}
           BUILD_ID="${BRANCH}-${REVISION}-${TS}"
+          BUILD_BRANCH="${BRANCH}"
           LATEST_ID="${{ env.ENVIRONMENT }}"
           echo ::set-output name=BUILD_DATE::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           echo ::set-output name=BUILD_ID::${BUILD_ID}
+          echo ::set-output name=BUILD_BRANCH::${BUILD_BRANCH}
           echo ::set-output name=LATEST_ID::${LATEST_ID}
 
       - name: Configure AWS Credentials
@@ -109,4 +111,5 @@ jobs:
           cache-to: type=gha,mode=max
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_ID }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.BUILD_BRANCH }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.CONTAINER_NAME }}:${{ steps.prep.outputs.LATEST_ID }}
